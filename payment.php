@@ -2,8 +2,8 @@
  
     session_start();
  
-    require_once ('./config.php');
-    require_once ('./AuthorizeNet.php');
+    require_once ('./includes/config.php');
+    require_once ('./includes/AuthorizeNet.php');
  
     if (isset($_POST['cc_payment_submit']))
     {
