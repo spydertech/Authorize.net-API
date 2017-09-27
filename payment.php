@@ -1,75 +1,102 @@
 <?php
-
-require_once ('./includes/config.php');
-require_once ('./AuthorizeNet.php');
-
-if(isset($_POST['submit_payment'])){
-		$transaction = new AuthorizeNetAIM;
-		$transaction->setSandbox(AUTHORIZENET_SANDBOX); //For testing
-		$transaction->setFields(
-				array(
-						'amount' => $_POST['finalPrice'],
-						'card_num' => $_POST['ccnumber'],
-						'exp_date' => $_POST['expdate'],
-						'first_name' => $_POST['fname'],
-						'last_name' => $_POST['lname'],
-						'address' => $_POST['address'],
-						'city' => $_POST['city'],
-						'state' => $_POST['state'],
-						'country' => 'UK',
-						'zip' => $_POST['zip'],
-						//'email' => $_SESSION['user_email'],
-						'card_code' => $_POST['ccv'],
-				)
-		);
-
-		//$transaction->setCustomField("user_id", $_SESSION['user_id']); //If you want to record user id
-		$response = $transaction->authorizeAndCapture();
-		if ($response->approved) {
-
-			//Do your successful payment stuff here like write transaction to DB...
-
-			// If auto renew box is checked
-			if($_POST['arb']=='Y')
-			{
-			
-				$subscription = new AuthorizeNet_Subscription;
-				$subscription->name = "Rent ".$unit->getName(); // whatever you want to name the subscription
-				$subscription->intervalLength = "1"; // how many units is each subscription good for
-				$subscription->intervalUnit = "months"; // can be days, months, years
-				$subscription->startDate = date("Y-m-d h:i:sa"); //can be current date and time or a field they select in the form
-				$subscription->totalOccurrences = "99"; // this is how many times the subscription will repeat
-				$subscription->amount = $_POST['finalPrice']; // amount customer will be charged when the subscription goes off
-				$subscription->creditCardCardNumber = $_POST['ccnumber'];
-				$subscription->creditCardExpirationDate = $_POST['expdate'];
-				$subscription->creditCardCardCode = $_POST['ccv'];
-				$subscription->billToFirstName = $_POST['fname'];
-				$subscription->billToLastName = $_POST['lname'];
-				$subscription->customerId = $_SESSION['user_id']."_".$transaction->getTransactionId(); // an identifier for the subscription
-				$refId = $bookingId;
-				
-				$request = new AuthorizeNetARB;
-				$request->setRefId($refId);
-				$response = $request->createSubscription($subscription);
-				if($response->isOk())
-				{
-					$subscription_id = $response->getSubscriptionId();
-					//$query->execute("UPDATE booking SET arb_id='".$subscription_id."'");
-					// run an UPDATE query here for subscription id
-				}
-				else
-					$errMsg="Subsription has not been created. Please try later";
-			}
-
-			die('success!');
-
-		} else {
-
-			//Do your failed payment stuff here like display error messages.
-				global $response;
-				echo '<h2>Payment Status</h2><br>';
-				echo '<p>'. $response->response_reason_text .'</p>';	
-
-			die('failure');
-		}
-}
+ 
+    session_start();
+ 
+    require_once ('./config.php');
+    require_once ('./AuthorizeNet.php');
+ 
+    if (isset($_POST['cc_payment_submit']))
+    {
+        $transaction = new AuthorizeNetAIM;
+         
+        // Check is sandbox mode is active.
+        $transaction -> setSandbox(AUTHORIZENET_SANDBOX);
+         
+        $transaction -> setFields(
+            array (
+                'amount'     => $_POST['amount_paid'],
+                'first_name' => $_POST['cc_fname'],
+                'last_name'  => $_POST['cc_lname'],
+                'card_num'   => $_POST['cc_number'],
+                'exp_date'   => $_POST['cc_exp'],
+                'card_code'  => $_POST['cc_ccv'],
+                'country'    => 'US'
+            )
+        );
+ 
+        // Use this if you want to record a custom field to use on the Authorize receipt.
+        // $transaction -> setCustomField('YOUR CUSTOM STRING');
+         
+        // Get the response from Authorize.
+        $response = $transaction -> authorizeAndCapture();
+         
+        // If the response is approved...
+        if ($response -> approved) 
+        {
+            // Check if the transaction is set to auto-renew.
+            if ($_POST['auto_renew'] == 'Y')
+            {
+                // Start a new subscription.
+                $subscription = new AuthorizeNet_Subscription;
+                                 
+                // Name the subscription.
+                $subscription -> name = 'SUBSCRIPTION NAME';
+                 
+                // Set a subscription interval length.
+                $subscription -> intervalLength = '1';
+                $subscription -> intervalUnit = 'months';
+                 
+                // Set a start date for the subscription.
+                $subscription -> startDate = date('Y-m-d h:i:sa'); 
+                 
+                // Set how many times the subscription will repeat.
+                $subscription -> totalOccurrences = '999';
+                 
+                // Get the posted information from the form.
+                $subscription -> amount = $_POST['amount_paid'];
+                $subscription -> billToFirstName = $_POST['cc_fname'];
+                $subscription -> billToLastName = $_POST['cc_lname'];
+                $subscription -> creditCardCardNumber = $_POST['cc_number'];
+                $subscription -> creditCardExpirationDate = $_POST['cc_exp'];
+                $subscription -> creditCardCardCode = $_POST['cc_ccv'];
+                 
+                // Set the subscription identifier (required).
+                $subscription -> customerId = 'YOUR CUSTOM STRING';
+                 
+                // Used to search Authorize's recurring payments section (optional).
+                $refId = '';
+ 
+                $request = new AuthorizeNetARB;
+                $request -> setRefId($refId);
+                 
+                // Get the response from Authorize.
+                $response = $request -> createSubscription($subscription);
+                if ($response -> isOk())
+                {
+                    // This is the subscription's ID, if you need it.
+                    // $subscription_id = $response -> getSubscriptionId();
+                     
+                    // Do success stuff for subscriptions only here.
+                }
+                else
+                {
+                    // Do failure stuff for subscriptions only here.
+                }
+            }
+             
+            // Do success stuff here - show an alert, write to database, send an email, etc.
+            $_SESSION['msg'] = '<div class="alert alert-success">Payment successful!</div>';    
+            header('Location: ./');
+            die();
+        } 
+         
+        // If the response is declined...
+        else
+        {
+            // Do failure stuff here - show an alert, etc.
+            global $response;
+            $_SESSION['msg'] = '<div class="alert alert-danger">'. $response -> response_reason_text .'</div>';  
+            header('Location: ./');
+            die();
+        }
+    }
